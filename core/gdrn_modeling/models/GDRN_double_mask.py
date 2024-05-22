@@ -30,8 +30,10 @@ from .net_factory import BACKBONES
 from core.utils.my_checkpoint import load_timm_pretrained
 
 logger = logging.getLogger(__name__)
-
-
+"Added Ordered Dict to calculate the inference time of the Model,os and csv to manipulate the data"
+from collections import OrderedDict
+import os
+import csv
 class GDRN_DoubleMask(nn.Module):
     def __init__(self, cfg, backbone, geo_head_net, neck=None, pnp_net=None):
         super().__init__()
@@ -61,7 +63,74 @@ class GDRN_DoubleMask(nn.Module):
                 self.register_parameter(
                     f"log_var_{loss_name}", nn.Parameter(torch.tensor([0.0], requires_grad=True, dtype=torch.float32))
                 )
+        
+        'Added three variable to find calculate the time and further the thresholds'
+        self.backbone_T,self.geo_head_T,self.pnp_T=[],[],[]
+        self.threshold_geo=cfg.FAST.THRESHOLD_GEO
+        self.threshold_pnp=cfg.FAST.THRESHOLD_PNP
+
+
         # yapf: enable
+        'Added inference time to accumulate the time and save to save the data as csv,get_plot to plot the data if required'
+    def inference_time(self,backbone_T,geo_head_T,pnp_T):
+        
+        self.backbone_T.append(backbone_T)
+        self.pnp_T.append(pnp_T)
+        self.geo_head_T.append(geo_head_T)
+    def save(self):
+        
+        avg_backbone=sum(self.backbone_T[1:])/(len(self.backbone_T)-1)
+        avg_pnp=sum(self.pnp_T[1:])/(len(self.pnp_T)-1)
+        avg_geo=sum(self.geo_head_T[1:])/(len(self.geo_head_T)-1)
+        ordered_dict=OrderedDict()
+        ordered_dict["THRESHOLD_GEO"]=self.threshold_geo
+        ordered_dict["THRESHOLD_PNP"]=self.threshold_pnp
+
+        ordered_dict["BACKBONE"]=avg_backbone
+        ordered_dict["GEO_HEAD"]=avg_geo
+        ordered_dict["PNP_HEAD"]=avg_pnp      
+        result=[ordered_dict]
+
+        output_file = '/gdrnpp_bop2022/core/gdrn_modeling/Fast/plots/Inference_time.csv'
+        # Specify the headers
+        headers=list(ordered_dict.keys())
+    
+        file_exists = os.path.exists(output_file)
+        # Append data to CSV file
+        with open(output_file, 'a', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=headers)
+
+            # Check if the file is empty
+        
+            if not file_exists:
+                writer.writeheader()
+            # Write data rows
+            for row in result:
+                writer.writerow(row)
+
+        print(f'Data has been appended to {output_file}')
+    
+    def get_plot(self):
+        import matplotlib.pyplot as plt
+        import datetime
+        
+        plt.figure(figsize=(10,6))
+        plt.plot(self.backbone_T,label="ConvnextB",color='red',linestyle='--',marker='o')
+        plt.plot(self.geo_head_T,label="Geo_Head",color='green',linestyle='--',marker='o')
+        plt.plot(self.pnp_T,label="Pnp_net",color='blue',linestyle='--',marker='o')
+        
+        plt.xlabel("Iterations")
+        plt.ylabel("Time")
+        plt.title("Inference_time")
+        plt.legend()
+        current_time=datetime.datetime.now()
+        time_str=current_time.strftime('%Y-%m-%d %H:%M:%S')
+        file=f"inference_time_baseline{time_str}_{self.threshold}.png"
+        path="/gdrnpp_bop2022/core/gdrn_modeling/Fast/plots/file"
+
+        plt.savefig(path)
+
+        plt.close(fig)
 
     def forward(
         self,
@@ -95,15 +164,21 @@ class GDRN_DoubleMask(nn.Module):
 
         device = x.device
         bs = x.shape[0]
+        
         num_classes = net_cfg.NUM_CLASSES
         out_res = net_cfg.OUTPUT_RES
 
         # x.shape [bs, 3, 256, 256]
+        start_b= time.perf_counter()
         conv_feat = self.backbone(x)  # [bs, c, 8, 8]
+        backbone_T=time.perf_counter()-start_b
         if self.neck is not None:
             conv_feat = self.neck(conv_feat)
+        start_g= time.perf_counter()
         vis_mask, full_mask, coor_x, coor_y, coor_z, region = self.geo_head_net(conv_feat)
+        geo_head_T=time.perf_counter()-start_g
 
+        start_p= time.perf_counter()
         if g_head_cfg.XYZ_CLASS_AWARE:
             assert roi_classes is not None
             coor_x = coor_x.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
@@ -158,8 +233,15 @@ class GDRN_DoubleMask(nn.Module):
         pred_rot_, pred_t_ = self.pnp_net(
             coor_feat, region=region_atten, extents=roi_extents, mask_attention=mask_atten
         )
+        pnp_T=time.perf_counter()-start_p
+        
+        self.inference_time(backbone_T,geo_head_T,pnp_T)
 
+        
+        
         # convert pred_rot to rot mat -------------------------
+        
+        
         rot_type = pnp_net_cfg.ROT_TYPE
         pred_rot_m = get_rot_mat(pred_rot_, rot_type)
 

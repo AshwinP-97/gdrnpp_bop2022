@@ -58,12 +58,15 @@ def setup(args):
         cfg.merge_from_dict(args.opts)
     ############## pre-process some cfg options ######################
     # NOTE: check if need to set OUTPUT_DIR automatically
+    import ipdb;ipdb.set_trace()
     if cfg.OUTPUT_DIR.lower() == "auto":
         cfg.OUTPUT_DIR = osp.join(
             cfg.OUTPUT_ROOT,
             osp.splitext(args.config_file)[0].split("configs/")[1],
         )
         iprint(f"OUTPUT_DIR was automatically set to: {cfg.OUTPUT_DIR}")
+
+    cfg.OUTPUT_DIR=osp.join(cfg.OUTPUT_DIR,cfg.EXP_ID)
 
     if cfg.get("EXP_NAME", "") == "":
         setproctitle("{}.{}".format(osp.splitext(osp.basename(args.config_file))[0], get_time_str()))

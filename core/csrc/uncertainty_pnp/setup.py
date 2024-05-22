@@ -1,9 +1,9 @@
 import os
 
 ceres_include = "./include"
-ceres_library = "./lib/libceres.so"
+ceres_library = "/usr/lib/x86_64-linux-gnu/libceres.so"
 eigen_include = "./include/eigen3"
-glog_library = "./lib/libglog.so"
+glog_library = "/usr/lib/x86_64-linux-gnu/libglog.so"
 os.system(
     "gcc -shared src/uncertainty_pnp.cpp -c -o src/uncertainty_pnp.cpp.o -fopenmp -fPIC -O2 -std=c++11 -I {} -I {}".format(
         ceres_include, eigen_include

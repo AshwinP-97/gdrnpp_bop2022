@@ -49,7 +49,7 @@ INPUT = dict(
     WITH_BG_DEPTH=False,
     BG_DEPTH_FACTOR=10000.0,
     BG_TYPE="VOC_table",  # VOC_table | coco | VOC | SUN2012 | SUN_RGBD
-    BG_IMGS_ROOT="datasets/VOCdevkit/VOC2012/",  # "datasets/coco/train2017/" | "datasets/SUN_RGBD/SUNRGBD"
+    BG_IMGS_ROOT="/gdrnpp_bop2022/datasets/VOCdevkit/VOC2012/",  # "datasets/coco/train2017/" | "datasets/SUN_RGBD/SUNRGBD"
     NUM_BG_IMGS=10000,
     CHANGE_BG_PROB=0.5,  # prob to change bg of real image
     # truncation fg (randomly replace some side of fg with bg during replace_bg)

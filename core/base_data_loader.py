@@ -437,7 +437,7 @@ class Base_DatasetFromList(data.Dataset):
             bg_img = np.zeros((H, W, 3), dtype=np.uint8)
             logger.warning("bad background image: {}".format(filename))
 
-        mask = im_mask.copy().astype(np.bool)
+        mask = im_mask.copy().astype(bool)
         if truncate_fg:
             mask = self.trunc_mask(im_mask)
         mask_bg = ~mask
@@ -453,7 +453,7 @@ class Base_DatasetFromList(data.Dataset):
 
     def trunc_mask(self, mask):
         # return the bool truncated mask
-        mask = mask.copy().astype(np.bool)
+        mask = mask.copy().astype(bool)
         nonzeros = np.nonzero(mask.astype(np.uint8))
         x1, y1 = np.min(nonzeros, axis=1)
         x2, y2 = np.max(nonzeros, axis=1)

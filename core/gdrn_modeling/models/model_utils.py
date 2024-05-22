@@ -134,6 +134,11 @@ def get_geo_head(cfg):
     elif "DoubleMask" in geo_head_type:
         xyz_dim, mask_dim, region_dim = get_xyz_doublemask_region_out_dim(cfg)
         region_num_classes = net_cfg.NUM_CLASSES if geo_head_cfg.REGION_CLASS_AWARE else 1
+        if cfg.FAST.MODEL_CFG.PRUNE is True:
+            feat_dim=cfg.FAST.MODEL_CFG.GEO_HEAD_feat
+            num_gn_groups=cfg.FAST.MODEL_CFG.GEO_HEAD_num_groups
+            geo_head_init_cfg.update(feat_dim=feat_dim,num_gn_groups=num_gn_groups)
+
         geo_head_init_cfg.update(
             xyz_num_classes=xyz_num_classes,
             mask_num_classes=mask_num_classes,
@@ -235,12 +240,24 @@ def get_pnp_net(cfg):
     pnp_head_type = pnp_net_init_cfg.pop("type")
 
     if pnp_head_type in ["ConvPnPNet", "ConvPnPNetCls"]:
+        
         pnp_net_init_cfg.update(
             nIn=pnp_net_in_channel,
             rot_dim=rot_dim,
             num_regions=g_head_cfg.NUM_REGIONS,
             mask_attention_type=pnp_net_cfg.MASK_ATTENTION,
         )
+        if cfg.FAST.MODEL_CFG.PRUNE is True:
+            featdim=cfg.FAST.MODEL_CFG.PNP_NET_Input
+            num_gn_groups=cfg.FAST.MODEL_CFG.PNP_NET_num_groups
+            fc_out_dim= cfg.FAST.MODEL_CFG.PNP_NET_fc_out
+            fc_out_dim2= cfg.FAST.MODEL_CFG.PNP_NET_fc2_out
+            pnp_net_init_cfg.update(
+            featdim=featdim,
+            num_gn_groups=num_gn_groups,
+            fc_out_dim=fc_out_dim,
+            fc_out_dim2=fc_out_dim2
+            )
     elif pnp_head_type == "PointPnPNet":
         pnp_net_init_cfg.update(
             nIn=pnp_net_in_channel,

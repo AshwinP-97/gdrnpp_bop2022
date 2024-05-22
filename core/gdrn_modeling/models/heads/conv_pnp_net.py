@@ -26,6 +26,8 @@ class ConvPnPNet(nn.Module):
         flat_op="flatten",
         final_spatial_size=(8, 8),
         denormalize_by_extent=True,
+        fc_out_dim=1024,
+        fc_out_dim2=256
     ):
         """
         Args:
@@ -94,11 +96,11 @@ class ConvPnPNet(nn.Module):
         }[flat_op]
 
         # self.fc1 = nn.Linear(featdim * 8 * 8 + 128, 1024)  # NOTE: 128 for extents feature
-        self.fc1 = nn.Linear(fc_in_dim, 1024)
-        self.fc2 = nn.Linear(1024, 256)
-        self.fc_r = nn.Linear(256, rot_dim)  # quat or rot6d
+        self.fc1 = nn.Linear(fc_in_dim,fc_out_dim)
+        self.fc2 = nn.Linear(fc_out_dim, fc_out_dim2)
+        self.fc_r = nn.Linear(fc_out_dim2, rot_dim)  # quat or rot6d
         # TODO: predict centroid and z separately
-        self.fc_t = nn.Linear(256, 3)
+        self.fc_t = nn.Linear(fc_out_dim2, 3)
 
         # feature for extent
         # self.extent_fc1 = nn.Linear(3, 64)

@@ -1,0 +1,29 @@
+{
+    "name": "CUDA ML Development",
+    "image": "nvidia/cudagl:11.3.0-devel-ubuntu20.04",
+    "context": ".",
+    "dockerFile": "Dockerfile",
+    "settings": { 
+        "terminal.integrated.shell.linux": "/bin/bash"
+    },
+    "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "ms-vscode.cmake-tools",
+        "twxs.cmake",
+        "ms-vscode.cpptools"
+    ],
+    "runArgs": [
+        "--gpus", "all",
+        "--shm-size", "2g"
+    ],
+    "remoteUser": "root",
+    "workspaceFolder": "/gdrnpp_bop2022",
+    "postCreateCommand": "bash lib/egl_renderer/compile_cpp_egl_renderer.sh",
+    "forwardPorts": [],
+    "mounts": [
+        "source=/igd/a4/homestud/pramod/gdrnpp_bop2022,target=/gdrnpp_bop2022,type=bind,consistency=cached"
+    ]
+}
+
+

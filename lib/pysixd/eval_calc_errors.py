@@ -56,6 +56,8 @@ def eval_calc_errors(
     #     osp.join(result_base, 'hodan-iros15_hinterstoisser'),
     #     # osp.join(result_base, 'hodan-iros15_tless_primesense'),
     # ]
+
+    import ipdb;ipdb.set_trace()
     if dataset in ["linemod", "hinterstoisser"]:
         test_type = ""
     else:

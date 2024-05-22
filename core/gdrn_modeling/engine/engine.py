@@ -161,6 +161,8 @@ class GDRN_Lite(LightningLite):
 
         if len(results) == 1:
             results = list(results.values())[0]
+        if cfg.FAST.FLAG :
+            model._module.save()
         return results
 
     def do_train(self, cfg, args, model, optimizer, renderer=None, resume=False):
