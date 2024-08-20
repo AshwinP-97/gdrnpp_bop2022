@@ -67,7 +67,7 @@ MODEL = dict(
             FREEZE=False,
             PRETRAINED="timm",
             INIT_CFG=dict(
-                type="timm/convnext_base",
+                type="timm/convnext_base.fb_in1k",
                 pretrained=True,
                 in_chans=3,
                 features_only=True,
@@ -140,3 +140,7 @@ VAL = dict(
 )
 
 TEST = dict(EVAL_PERIOD=0, VIS=False, TEST_BBOX_TYPE="est")  # gt | est
+
+LATENCY = dict(MEASURE=0)
+
+EXP_ID="convnext_base_refine"

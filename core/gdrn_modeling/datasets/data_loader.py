@@ -20,6 +20,7 @@ from core.utils.dataset_utils import (
     load_detections_into_dataset,
     my_build_batch_data_loader,
     trivial_batch_collator,
+    train_val_split
 )
 from core.utils.my_distributed_sampler import InferenceSampler, RepeatFactorTrainingSampler, TrainingSampler
 from core.utils.ssd_color_transform import ColorAugSSDTransform
@@ -856,31 +857,47 @@ def build_gdrn_train_loader(cfg, dataset_names):
     Returns:
         an infinite iterator of training data
     """
+    
     dataset_dicts = get_detection_dataset_dicts(
         dataset_names,
         filter_empty=cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS,
         min_keypoints=cfg.MODEL.ROI_KEYPOINT_HEAD.MIN_KEYPOINTS_PER_IMAGE if cfg.MODEL.KEYPOINT_ON else 0,
         proposal_files=cfg.DATASETS.PROPOSAL_FILES_TRAIN if cfg.MODEL.LOAD_PROPOSALS else None,
     )
-
     anno_keys_to_remove = try_get_key(cfg, "DATALOADER.REMOVE_ANNO_KEYS", default=[])
     if len(anno_keys_to_remove) > 0:
         dataset_dicts = remove_anno_keys_dataset_dicts(dataset_dicts, keys=anno_keys_to_remove)
         logger.warning(f"keys: {anno_keys_to_remove} removed from annotations")
 
     dataset_dicts = filter_invalid_in_dataset_dicts(dataset_dicts, visib_thr=cfg.DATALOADER.FILTER_VISIB_THR)
+    if cfg.VALIDATE.VAL:
+        #if "hb" not in str(cfg.DATASETS.TRAIN) and "itodd" not in str(cfg.DATASETS.TRAIN):
+        train,val=train_val_split(dataset_dicts,split=0.9)
+        #else:
+        #   train=dataset_dicts
 
-    if cfg.MODEL.POSE_NET.XYZ_ONLINE:
-        dataset = GDRN_Online_DatasetFromList(cfg, split="train", lst=dataset_dicts, copy=False)
     else:
-        dataset = GDRN_DatasetFromList(cfg, split="train", lst=dataset_dicts, copy=False)
-
+        train=dataset_dicts
+    
+    if cfg.MODEL.POSE_NET.XYZ_ONLINE:
+        
+        dataset1 = GDRN_Online_DatasetFromList(cfg, split="train", lst=train, copy=False)
+        if cfg.VALIDATE.VAL:
+            #if "hb" not in str(cfg.DATASETS.TRAIN) and "itodd" not in str(cfg.DATASETS.TRAIN):
+            dataset2 = GDRN_Online_DatasetFromList(cfg, split="train", lst=val, copy=False)
+    
+    else:
+        dataset= GDRN_DatasetFromList(cfg, split="train", lst=dataset_dicts, copy=False)
+    
     sampler_name = cfg.DATALOADER.SAMPLER_TRAIN
 
     logger.info("Using training sampler {}".format(sampler_name))
     # TODO avoid if-else?
     if sampler_name == "TrainingSampler":
-        sampler = TrainingSampler(len(dataset))
+        sampler = TrainingSampler(len(dataset1))
+        if cfg.VALIDATE.VAL:
+            #if "hb" not in str(cfg.DATASETS.TRAIN) and "itodd" not in str(cfg.DATASETS.TRAIN):
+            sampler2 = TrainingSampler(len(dataset2))
     elif sampler_name == "RepeatFactorTrainingSampler":
         repeat_factors = RepeatFactorTrainingSampler.repeat_factors_from_category_frequency(
             dataset_dicts, cfg.DATALOADER.REPEAT_THRESHOLD
@@ -888,15 +905,43 @@ def build_gdrn_train_loader(cfg, dataset_names):
         sampler = RepeatFactorTrainingSampler(repeat_factors)
     else:
         raise ValueError("Unknown training sampler: {}".format(sampler_name))
-    return my_build_batch_data_loader(
-        dataset,
+    if cfg.VALIDATE.VAL:
+        #if "hb" not in str(cfg.DATASETS.TRAIN) and "itodd" not in str(cfg.DATASETS.TRAIN):
+        return my_build_batch_data_loader(
+            dataset1,
+            sampler,
+            cfg.SOLVER.IMS_PER_BATCH,
+            aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
+            num_workers=cfg.DATALOADER.NUM_WORKERS,
+            persistent_workers=cfg.DATALOADER.PERSISTENT_WORKERS,
+            ),my_build_batch_data_loader(
+            dataset2,
+            sampler2,
+            cfg.SOLVER.IMS_PER_BATCH,
+            aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
+            num_workers=cfg.DATALOADER.NUM_WORKERS,
+            persistent_workers=cfg.DATALOADER.PERSISTENT_WORKERS,
+            )
+        """
+        #else:
+             return my_build_batch_data_loader(
+        dataset1,
         sampler,
         cfg.SOLVER.IMS_PER_BATCH,
         aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
         num_workers=cfg.DATALOADER.NUM_WORKERS,
         persistent_workers=cfg.DATALOADER.PERSISTENT_WORKERS,
-    )
-
+        )"""
+    
+    else:
+        return my_build_batch_data_loader(
+        dataset1,
+        sampler,
+        cfg.SOLVER.IMS_PER_BATCH,
+        aspect_ratio_grouping=cfg.DATALOADER.ASPECT_RATIO_GROUPING,
+        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        persistent_workers=cfg.DATALOADER.PERSISTENT_WORKERS,
+        )
 
 def build_gdrn_test_loader(cfg, dataset_name, train_objs=None, sampler=None, batch_size=1, pin_memory=False):
     """Similar to `build_detection_train_loader`. But this function uses the
@@ -918,6 +963,7 @@ def build_gdrn_test_loader(cfg, dataset_name, train_objs=None, sampler=None, bat
         if cfg.MODEL.LOAD_PROPOSALS
         else None,
     )
+    
 
     # load test detection results
     if cfg.MODEL.LOAD_DETS_TEST:

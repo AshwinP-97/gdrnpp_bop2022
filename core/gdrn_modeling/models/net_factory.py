@@ -24,10 +24,13 @@ from .backbones.resnet_d2 import ResNet50_GN_D2
 from .necks.fpn import FPN
 from .heads.fpn_mask_xyz_region_head import FPNMaskXyzRegionHead
 from .heads.top_down_mask_xyz_region_head import TopDownMaskXyzRegionHead
+
 from .heads.top_down_mask_xyz_head import TopDownMaskXyzHead
 from .heads.top_down_doublemask_xyz_region_head import (
     TopDownDoubleMaskXyzRegionHead,
 )
+
+from .heads.top_down_doublemask_xyz_region_head_prog_2 import TopDownDoubleMaskXyzRegionHeadProg
 from .heads.conv_mask_xyz_region_head import ConvMaskXyzRegionHead
 from .heads.conv_pnp_net import ConvPnPNet
 from .heads.conv_pnp_net_no_region import ConvPnPNetNoRegion
@@ -80,6 +83,7 @@ NECKS = {"FPN": FPN}
 # -------------------------------------------------------------------------------
 HEADS = {
     # mask-xyz-region
+    "TopDownDoubleMaskXyzRegionHead_prog_2" : TopDownDoubleMaskXyzRegionHeadProg,
     "TopDownDoubleMaskXyzRegionHead": TopDownDoubleMaskXyzRegionHead,
     "TopDownMaskXyzRegionHead": TopDownMaskXyzRegionHead,
     "ConvMaskXyzRegionHead": ConvMaskXyzRegionHead,

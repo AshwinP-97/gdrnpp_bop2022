@@ -65,39 +65,53 @@ class GDRN_DoubleMask(nn.Module):
                 )
         
         'Added three variable to find calculate the time and further the thresholds'
-        self.backbone_T,self.geo_head_T,self.pnp_T=[],[],[]
+        self.backbone_time,self.geo_head_time,self.preprocess_time,self.pnp_time=[],[],[],[]
         self.threshold_geo=cfg.FAST.THRESHOLD_GEO
         self.threshold_pnp=cfg.FAST.THRESHOLD_PNP
 
 
         # yapf: enable
         'Added inference time to accumulate the time and save to save the data as csv,get_plot to plot the data if required'
-    def inference_time(self,backbone_T,geo_head_T,pnp_T):
+    def inference_time(self,backbone_T,geo_head_T,preprocess_T,pnp_T):
         
-        self.backbone_T.append(backbone_T)
-        self.pnp_T.append(pnp_T)
-        self.geo_head_T.append(geo_head_T)
-    def save(self):
+        self.backbone_time.append(backbone_T)
         
-        avg_backbone=sum(self.backbone_T[1:])/(len(self.backbone_T)-1)
-        avg_pnp=sum(self.pnp_T[1:])/(len(self.pnp_T)-1)
-        avg_geo=sum(self.geo_head_T[1:])/(len(self.geo_head_T)-1)
+        self.pnp_time.append(pnp_T)
+        self.preprocess_time.append(preprocess_T)
+        self.geo_head_time.append(geo_head_T)
+
+
+    def save(self,warm_up):
+        backbone=sum(self.backbone_time[warm_up:])/(len(self.backbone_time[warm_up:]))
+        pnp=sum(self.pnp_time[warm_up:])/(len(self.pnp_time[warm_up:]))
+        pre_process=sum(self.preprocess_time[warm_up:])/(len(self.preprocess_time[warm_up:]))
+        geo=sum(self.geo_head_time[warm_up:])/(len(self.geo_head_time[warm_up:]))
         ordered_dict=OrderedDict()
         ordered_dict["THRESHOLD_GEO"]=self.threshold_geo
         ordered_dict["THRESHOLD_PNP"]=self.threshold_pnp
 
-        ordered_dict["BACKBONE"]=avg_backbone
-        ordered_dict["GEO_HEAD"]=avg_geo
-        ordered_dict["PNP_HEAD"]=avg_pnp      
+        ordered_dict["BACKBONE"]=backbone
+        ordered_dict["GEO_HEAD"]=geo
+        ordered_dict["PNP_HEAD"]=pnp   
+        ordered_dict["PROCESS"] =pre_process  
+        ordered_dict["TOTAL_TIME"]=backbone+pre_process+geo+pnp
+        ordered_dict["NUM_OF_OBJECTS"]=self.cfg.MODEL.POSE_NET.NUM_CLASSES
+        ordered_dict["TIME_PER_INSTANCE"]=ordered_dict["TOTAL_TIME"]/self.cfg.MODEL.POSE_NET.NUM_CLASSES
         result=[ordered_dict]
-
-        output_file = '/gdrnpp_bop2022/core/gdrn_modeling/Fast/plots/Inference_time.csv'
+        #backbone_name=self.cfg.MODEL.POSE_NET.BACKBONE.INIT_CFG.type.split("/")[-1]
+        latency_out_dir = os.path.join(self.cfg.OUTPUT_DIR, self.cfg.EXP_ID,"latency.csv")
+        output_file = latency_out_dir
         # Specify the headers
         headers=list(ordered_dict.keys())
     
         file_exists = os.path.exists(output_file)
+
+        if file_exists:
+            mode='a'
+        else:
+            mode='w'
         # Append data to CSV file
-        with open(output_file, 'a', newline='') as csvfile:
+        with open(output_file, mode, newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=headers)
 
             # Check if the file is empty
@@ -109,28 +123,6 @@ class GDRN_DoubleMask(nn.Module):
                 writer.writerow(row)
 
         print(f'Data has been appended to {output_file}')
-    
-    def get_plot(self):
-        import matplotlib.pyplot as plt
-        import datetime
-        
-        plt.figure(figsize=(10,6))
-        plt.plot(self.backbone_T,label="ConvnextB",color='red',linestyle='--',marker='o')
-        plt.plot(self.geo_head_T,label="Geo_Head",color='green',linestyle='--',marker='o')
-        plt.plot(self.pnp_T,label="Pnp_net",color='blue',linestyle='--',marker='o')
-        
-        plt.xlabel("Iterations")
-        plt.ylabel("Time")
-        plt.title("Inference_time")
-        plt.legend()
-        current_time=datetime.datetime.now()
-        time_str=current_time.strftime('%Y-%m-%d %H:%M:%S')
-        file=f"inference_time_baseline{time_str}_{self.threshold}.png"
-        path="/gdrnpp_bop2022/core/gdrn_modeling/Fast/plots/file"
-
-        plt.savefig(path)
-
-        plt.close(fig)
 
     def forward(
         self,
@@ -164,80 +156,189 @@ class GDRN_DoubleMask(nn.Module):
 
         device = x.device
         bs = x.shape[0]
-        
         num_classes = net_cfg.NUM_CLASSES
         out_res = net_cfg.OUTPUT_RES
 
         # x.shape [bs, 3, 256, 256]
-        start_b= time.perf_counter()
-        conv_feat = self.backbone(x)  # [bs, c, 8, 8]
-        backbone_T=time.perf_counter()-start_b
+        
+        if cfg.LATENCY.MEASURE>0:
+            
+            torch.cuda.synchronize()
+            start_backbone= time.perf_counter()
+            if "faster_vit" in net_cfg.BACKBONE.INIT_CFG.type:
+                conv_feat=self.backbone.forward_features(x)
+            else:
+                conv_feat = self.backbone(x)
+            
+            torch.cuda.synchronize()
+            backbone_time=time.perf_counter()-start_backbone
+        else:
+            if "faster_vit" in net_cfg.BACKBONE.INIT_CFG.type:
+                conv_feat=self.backbone.forward_features(x)
+            else:
+                conv_feat = self.backbone(x)  # [bs, c, 8, 8]
+                """
+        if cfg.LATENCY.MEASURE>0:
+            start_event=torch.cuda.Event(enable_timing=True)
+            end_event=torch.cuda.Event(enable_timing=True)
+            start_event.record()
+            
+            if "faster_vit" in net_cfg.BACKBONE.INIT_CFG.type:
+                conv_feat=self.backbone.forward_features(x)
+            else:
+                conv_feat = self.backbone(x)
+            end_event.record()
+            #torch.cuda.synchronize()
+            backbone_time=start_event.elapsed_time(end_event)
+        else:
+            if "faster_vit" in net_cfg.BACKBONE.INIT_CFG.type:
+                conv_feat=self.backbone.forward_features(x)
+            else:
+                conv_feat = self.backbone(x) """
+        
         if self.neck is not None:
             conv_feat = self.neck(conv_feat)
-        start_g= time.perf_counter()
-        vis_mask, full_mask, coor_x, coor_y, coor_z, region = self.geo_head_net(conv_feat)
-        geo_head_T=time.perf_counter()-start_g
 
-        start_p= time.perf_counter()
-        if g_head_cfg.XYZ_CLASS_AWARE:
-            assert roi_classes is not None
-            coor_x = coor_x.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
-            coor_x = coor_x[torch.arange(bs).to(device), roi_classes]
-            coor_y = coor_y.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
-            coor_y = coor_y[torch.arange(bs).to(device), roi_classes]
-            coor_z = coor_z.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
-            coor_z = coor_z[torch.arange(bs).to(device), roi_classes]
+        if cfg.LATENCY.MEASURE>0:
+            
+            torch.cuda.synchronize()
+            start_geo= time.perf_counter()
+            vis_mask, full_mask, coor_x, coor_y, coor_z, region = self.geo_head_net(conv_feat)
+            torch.cuda.synchronize()
+            geo_head_time=time.perf_counter()-start_geo
+        
+        else:
 
-        if g_head_cfg.MASK_CLASS_AWARE:
-            assert roi_classes is not None
-            vis_mask = vis_mask.view(bs, num_classes, self.mask_out_dim // 2, out_res, out_res)
-            vis_mask = vis_mask[torch.arange(bs).to(device), roi_classes]
-            full_mask = full_mask.view(bs, num_classes, self.mask_out_dim // 2, out_res, out_res)
-            full_mask = full_mask[torch.arange(bs).to(device), roi_classes]
+            vis_mask, full_mask, coor_x, coor_y, coor_z, region = self.geo_head_net(conv_feat)
+       
+        if cfg.LATENCY.MEASURE>0:
+            torch.cuda.synchronize()
+            start_preprocess=time.perf_counter()
+            if g_head_cfg.XYZ_CLASS_AWARE:
+                assert roi_classes is not None
+                coor_x = coor_x.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
+                coor_x = coor_x[torch.arange(bs).to(device), roi_classes]
+                coor_y = coor_y.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
+                coor_y = coor_y[torch.arange(bs).to(device), roi_classes]
+                coor_z = coor_z.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
+                coor_z = coor_z[torch.arange(bs).to(device), roi_classes]
 
-        if g_head_cfg.REGION_CLASS_AWARE:
-            assert roi_classes is not None
-            region = region.view(bs, num_classes, self.region_out_dim, out_res, out_res)
-            region = region[torch.arange(bs).to(device), roi_classes]
+            if g_head_cfg.MASK_CLASS_AWARE:
+                assert roi_classes is not None
+                vis_mask = vis_mask.view(bs, num_classes, self.mask_out_dim // 2, out_res, out_res)
+                vis_mask = vis_mask[torch.arange(bs).to(device), roi_classes]
+                full_mask = full_mask.view(bs, num_classes, self.mask_out_dim // 2, out_res, out_res)
+                full_mask = full_mask[torch.arange(bs).to(device), roi_classes]
+
+            if g_head_cfg.REGION_CLASS_AWARE:
+                assert roi_classes is not None
+                region = region.view(bs, num_classes, self.region_out_dim, out_res, out_res)
+                region = region[torch.arange(bs).to(device), roi_classes]
 
         # -----------------------------------------------
         # get rot and trans from pnp_net
         # NOTE: use softmax for bins (the last dim is bg)
-        if coor_x.shape[1] > 1 and coor_y.shape[1] > 1 and coor_z.shape[1] > 1:
-            coor_x_softmax = F.softmax(coor_x[:, :-1, :, :], dim=1)
-            coor_y_softmax = F.softmax(coor_y[:, :-1, :, :], dim=1)
-            coor_z_softmax = F.softmax(coor_z[:, :-1, :, :], dim=1)
-            coor_feat = torch.cat([coor_x_softmax, coor_y_softmax, coor_z_softmax], dim=1)
+            if coor_x.shape[1] > 1 and coor_y.shape[1] > 1 and coor_z.shape[1] > 1:
+                coor_x_softmax = F.softmax(coor_x[:, :-1, :, :], dim=1)
+                coor_y_softmax = F.softmax(coor_y[:, :-1, :, :], dim=1)
+                coor_z_softmax = F.softmax(coor_z[:, :-1, :, :], dim=1)
+                coor_feat = torch.cat([coor_x_softmax, coor_y_softmax, coor_z_softmax], dim=1)
+            else:
+                coor_feat = torch.cat([coor_x, coor_y, coor_z], dim=1)  # BCHW
+
+            if pnp_net_cfg.WITH_2D_COORD:
+                if pnp_net_cfg.COORD_2D_TYPE == "rel":
+                    assert roi_coord_2d_rel is not None
+                    coor_feat = torch.cat([coor_feat, roi_coord_2d_rel], dim=1)
+                else:  # default abs
+                    assert roi_coord_2d is not None
+                    coor_feat = torch.cat([coor_feat, roi_coord_2d], dim=1)
+
+            # NOTE: for region, the 1st dim is bg
+            region_softmax = F.softmax(region[:, 1:, :, :], dim=1)
+
+            mask_atten = None
+            if pnp_net_cfg.MASK_ATTENTION != "none":
+                mask_atten = get_mask_prob(vis_mask, mask_loss_type=net_cfg.LOSS_CFG.MASK_LOSS_TYPE)
+
+            region_atten = None
+            if pnp_net_cfg.REGION_ATTENTION:
+                region_atten = region_softmax
+            torch.cuda.synchronize()
+            pre_process_time=time.perf_counter()-start_preprocess
         else:
-            coor_feat = torch.cat([coor_x, coor_y, coor_z], dim=1)  # BCHW
+            if g_head_cfg.XYZ_CLASS_AWARE:
+                assert roi_classes is not None
+                coor_x = coor_x.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
+                coor_x = coor_x[torch.arange(bs).to(device), roi_classes]
+                coor_y = coor_y.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
+                coor_y = coor_y[torch.arange(bs).to(device), roi_classes]
+                coor_z = coor_z.view(bs, num_classes, self.xyz_out_dim // 3, out_res, out_res)
+                coor_z = coor_z[torch.arange(bs).to(device), roi_classes]
 
-        if pnp_net_cfg.WITH_2D_COORD:
-            if pnp_net_cfg.COORD_2D_TYPE == "rel":
-                assert roi_coord_2d_rel is not None
-                coor_feat = torch.cat([coor_feat, roi_coord_2d_rel], dim=1)
-            else:  # default abs
-                assert roi_coord_2d is not None
-                coor_feat = torch.cat([coor_feat, roi_coord_2d], dim=1)
+            if g_head_cfg.MASK_CLASS_AWARE:
+                assert roi_classes is not None
+                vis_mask = vis_mask.view(bs, num_classes, self.mask_out_dim // 2, out_res, out_res)
+                vis_mask = vis_mask[torch.arange(bs).to(device), roi_classes]
+                full_mask = full_mask.view(bs, num_classes, self.mask_out_dim // 2, out_res, out_res)
+                full_mask = full_mask[torch.arange(bs).to(device), roi_classes]
 
-        # NOTE: for region, the 1st dim is bg
-        region_softmax = F.softmax(region[:, 1:, :, :], dim=1)
+            if g_head_cfg.REGION_CLASS_AWARE:
+                assert roi_classes is not None
+                region = region.view(bs, num_classes, self.region_out_dim, out_res, out_res)
+                region = region[torch.arange(bs).to(device), roi_classes]
 
-        mask_atten = None
-        if pnp_net_cfg.MASK_ATTENTION != "none":
-            mask_atten = get_mask_prob(vis_mask, mask_loss_type=net_cfg.LOSS_CFG.MASK_LOSS_TYPE)
+            # -----------------------------------------------
+            # get rot and trans from pnp_net
+            # NOTE: use softmax for bins (the last dim is bg)
+            if coor_x.shape[1] > 1 and coor_y.shape[1] > 1 and coor_z.shape[1] > 1:
+                coor_x_softmax = F.softmax(coor_x[:, :-1, :, :], dim=1)
+                coor_y_softmax = F.softmax(coor_y[:, :-1, :, :], dim=1)
+                coor_z_softmax = F.softmax(coor_z[:, :-1, :, :], dim=1)
+                coor_feat = torch.cat([coor_x_softmax, coor_y_softmax, coor_z_softmax], dim=1)
+            else:
+                coor_feat = torch.cat([coor_x, coor_y, coor_z], dim=1)  # BCHW
 
-        region_atten = None
-        if pnp_net_cfg.REGION_ATTENTION:
-            region_atten = region_softmax
+            if pnp_net_cfg.WITH_2D_COORD:
+                if pnp_net_cfg.COORD_2D_TYPE == "rel":
+                    assert roi_coord_2d_rel is not None
+                    coor_feat = torch.cat([coor_feat, roi_coord_2d_rel], dim=1)
+                else:  # default abs
+                    assert roi_coord_2d is not None
+                    coor_feat = torch.cat([coor_feat, roi_coord_2d], dim=1)
 
-        pred_rot_, pred_t_ = self.pnp_net(
-            coor_feat, region=region_atten, extents=roi_extents, mask_attention=mask_atten
-        )
-        pnp_T=time.perf_counter()-start_p
+            # NOTE: for region, the 1st dim is bg
+            region_softmax = F.softmax(region[:, 1:, :, :], dim=1)
+
+            mask_atten = None
+            if pnp_net_cfg.MASK_ATTENTION != "none":
+                mask_atten = get_mask_prob(vis_mask, mask_loss_type=net_cfg.LOSS_CFG.MASK_LOSS_TYPE)
+
+            region_atten = None
+            if pnp_net_cfg.REGION_ATTENTION:
+                region_atten = region_softmax
+            
+            
         
-        self.inference_time(backbone_T,geo_head_T,pnp_T)
+        if cfg.LATENCY.MEASURE>0:
 
+            
+            start_pnp= time.perf_counter()
+            pred_rot_, pred_t_ = self.pnp_net(
+                    coor_feat, region=region_atten, extents=roi_extents, mask_attention=mask_atten
+                )
+
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            pnp_time=time.perf_counter()-start_pnp
         
+            self.inference_time(backbone_time,geo_head_time,pre_process_time,pnp_time)
+
+        else:
+            pred_rot_, pred_t_ = self.pnp_net(
+                    coor_feat, region=region_atten, extents=roi_extents, mask_attention=mask_atten
+                )
+
         
         # convert pred_rot to rot mat -------------------------
         
@@ -279,13 +380,15 @@ class GDRN_DoubleMask(nn.Module):
             )
         else:
             raise ValueError(f"Unknown trans type: {pnp_net_cfg.TRANS_TYPE}")
-
+        
+        # out_dict is edited for distillation experiment
+        out_dict = {}   
         if not do_loss:  # test
             out_dict = {"rot": pred_ego_rot, "trans": pred_trans}
             if cfg.TEST.USE_PNP or cfg.TEST.SAVE_RESULTS_ONLY or cfg.TEST.USE_DEPTH_REFINE:
                 # TODO: move the pnp/ransac inside forward
                 out_dict.update(
-                    {
+                    {   
                         "mask": vis_mask,
                         "full_mask": full_mask,
                         "coor_x": coor_x,
@@ -294,8 +397,32 @@ class GDRN_DoubleMask(nn.Module):
                         "region": region,
                     }
                 )
+            if cfg.DISTILLATION.FLAG:
+                out_dict.update(
+                    {   "backbone" : conv_feat,
+                        "mask": vis_mask,
+                        "full_mask": full_mask,
+                        "coor_x": coor_x,
+                        "coor_y": coor_y,
+                        "coor_z": coor_z,
+                        "region": region,
+                    }
+                )
+                return out_dict,{}
         else:
-            out_dict = {}
+            if cfg.DISTILLATION.FLAG:
+                out_dict.update(
+                    {   "backbone" : conv_feat,
+                        "mask": vis_mask,
+                        "full_mask": full_mask,
+                        "coor_x": coor_x,
+                        "coor_y": coor_y,
+                        "coor_z": coor_z,
+                        "region": region,
+                    }
+                )
+            else:
+                out_dict = {}
             assert (
                 (gt_xyz is not None)
                 and (gt_trans is not None)

@@ -149,7 +149,7 @@ def prune(cfg,model,args,output,threshold_geo=0,threshold_pnp=0):
         model.to(torch.device('cuda'))
         if os.path.isdir(output):
             torch.save(new_state,model_path) 
-        output_dir="/gdrnpp_bop2022/configs/gdrn/lmo_pbr"
+        output_dir="/gdrnpp_bop2022/configs/gdrn/ycbv"
         path = osp.join(output_dir, 'l1_geo{threshold}_pnp{threshold2}_region{threshold3}.py'
                             .format(threshold=threshold_geo,threshold2=threshold_pnp,threshold3=new_cfg.MODEL.POSE_NET.GEO_HEAD.NUM_REGIONS))
         new_cfg.FAST.THRESHOLD_GEO=threshold_geo

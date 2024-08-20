@@ -158,7 +158,14 @@ def get_geo_head(cfg):
             mask_out_dim=mask_dim,
             region_out_dim=region_dim,
         )
+
+    """    
+    if "prog" in geo_head_type:
+        geo_head_init_cfg.update(layer=geo_head_cfg.LAYER)
+    """
+
     geo_head = HEADS[geo_head_type](**geo_head_init_cfg)
+
 
     if geo_head_cfg.FREEZE:
         for param in geo_head.parameters():
@@ -171,7 +178,7 @@ def get_geo_head(cfg):
                 "lr": float(cfg.SOLVER.BASE_LR) * geo_head_cfg.LR_MULT,
             }
         )
-
+    
     return geo_head, params_lr_list
 
 

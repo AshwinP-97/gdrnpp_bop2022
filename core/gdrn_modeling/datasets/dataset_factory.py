@@ -86,6 +86,7 @@ def register_datasets_in_cfg(cfg):
         "TRAIN_REAL",
         "TRAIN2",
         "TRAIN_SYN_SUP",
+        "VAL"
     ]:
         for name in cfg.DATASETS.get(split, []):
             if name in DatasetCatalog.list():

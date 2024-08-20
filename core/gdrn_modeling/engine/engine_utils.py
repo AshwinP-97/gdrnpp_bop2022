@@ -21,6 +21,7 @@ def batch_data(cfg, data, renderer=None, device="cuda", phase="train"):
         return batch_data_train_online(cfg, data, renderer=renderer, device=device)
 
     # batch training data
+    
     batch = {}
     batch["roi_img"] = torch.stack([d["roi_img"] for d in data], dim=0).to(device, non_blocking=True)
     if cfg.INPUT.WITH_DEPTH:

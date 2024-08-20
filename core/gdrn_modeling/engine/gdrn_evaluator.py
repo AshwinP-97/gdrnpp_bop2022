@@ -161,6 +161,7 @@ class GDRN_Evaluator(DatasetEvaluator):
             outputs: stores time
         """
         cfg = self.cfg
+        
         if cfg.TEST.USE_PNP:
             if cfg.TEST.PNP_TYPE.lower() == "ransac_pnp":
                 return self.process_pnp_ransac(inputs, outputs, out_dict)
@@ -512,7 +513,7 @@ class GDRN_Evaluator(DatasetEvaluator):
                 rot_est = out_rots[out_i]
                 trans_est = out_transes[out_i]
                 pose_est = np.hstack([rot_est, trans_est.reshape(3, 1)])
-                depth_sensor_crop = cv2.resize(_input['roi_depth'][inst_i][-1].cpu().numpy().copy().squeeze(), (self.out_res, self.out_res))
+                depth_sensor_crop = cv2.resize(_input['roi_depth'][inst_i][-1].cpu().numpy().copy().squeeze(), (64, 64))
                 depth_sensor_mask_crop = depth_sensor_crop > 0
 
                 net_cfg = cfg.MODEL.POSE_NET
@@ -663,6 +664,54 @@ class GDRN_Evaluator(DatasetEvaluator):
         }
         results.append(result)
         return results
+#Function to measure the inference time of each of the model networks and save it
+
+def gdrn_latency(cfg,model,data_loader,evaluator):
+    logger = logging.getLogger(__name__)
+    logger.info("Start measuring of time {} images".format(len(data_loader)))
+
+    total = len(data_loader)  # inference data loader must have a fixed length
+    if evaluator is None:
+        # create a no-op evaluator
+        evaluator = DatasetEvaluators([])
+    evaluator.reset()
+
+    num_warmup = min(5, total - 1)
+    
+    with inference_context(model), torch.no_grad():
+        for idx, inputs in enumerate(data_loader):
+            
+            #############################
+            # process input
+            if not isinstance(inputs, list):  # bs=1
+                inputs = [inputs]
+            batch = batch_data(cfg, inputs, phase="test")
+            if evaluator.train_objs is not None:
+                roi_labels = batch["roi_cls"].cpu().numpy().tolist()
+                obj_names = [evaluator.obj_names[_l] for _l in roi_labels]
+                if all(_obj not in evaluator.train_objs for _obj in obj_names):
+                    continue
+
+           
+
+            if cfg.INPUT.WITH_DEPTH and "depth" in cfg.MODEL.POSE_NET.NAME.lower():
+                inp = torch.cat([batch["roi_img"], batch["roi_depth"]], dim=1)
+            else:
+                inp = batch["roi_img"]
+            
+            out_dict = model(inp,
+                    roi_classes=batch["roi_cls"],
+                    roi_cams=batch["roi_cam"],
+                    roi_whs=batch["roi_wh"],
+                    roi_centers=batch["roi_center"],
+                    resize_ratios=batch["resize_ratio"],
+                    roi_coord_2d=batch.get("roi_coord_2d", None),
+                    roi_coord_2d_rel=batch.get("roi_coord_2d_rel", None),
+                    roi_extents=batch.get("roi_extent", None),)
+                
+            
+            # NOTE: added
+        model._module.save(warm_up=num_warmup)
 
 
 def gdrn_inference_on_dataset(cfg, model, data_loader, evaluator, amp_test=False):
@@ -698,6 +747,8 @@ def gdrn_inference_on_dataset(cfg, model, data_loader, evaluator, amp_test=False
     start_time = time.perf_counter()
     total_compute_time = 0
     total_process_time = 0
+    depth_time=[]
+    avg_det_time=[]
     with inference_context(model), torch.no_grad():
         for idx, inputs in enumerate(data_loader):
             if idx == num_warmup:
@@ -732,7 +783,7 @@ def gdrn_inference_on_dataset(cfg, model, data_loader, evaluator, amp_test=False
                 inp = torch.cat([batch["roi_img"], batch["roi_depth"]], dim=1)
             else:
                 inp = batch["roi_img"]
-
+            
             with autocast(enabled=amp_test):  # gdrn amp_test seems slower
                 out_dict = model(
                     inp,
@@ -744,25 +795,33 @@ def gdrn_inference_on_dataset(cfg, model, data_loader, evaluator, amp_test=False
                     roi_coord_2d=batch.get("roi_coord_2d", None),
                     roi_coord_2d_rel=batch.get("roi_coord_2d_rel", None),
                     roi_extents=batch.get("roi_extent", None),
+                    
                 )
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
             cur_compute_time = time.perf_counter() - start_compute_time
             total_compute_time += cur_compute_time
             # NOTE: added
+            
             outputs = [{} for _ in range(len(inputs))]
             for _i in range(len(outputs)):
                 # outputs[_i]["time"] = cur_compute_time + float(inputs[_i].get("time", 0))
                 det_time = 0
                 if "time" in inputs[_i]:
+                    
                     det_time = inputs[_i]["time"][0]  # list
+                    avg_det_time.append(det_time)
+                det_time=0
                 outputs[_i]["time"] = cur_compute_time + det_time
-
+                
+            
             start_process_time = time.perf_counter()
-            evaluator.process(inputs, outputs, out_dict)  # RANSAC/PnP
+            evaluator.process(inputs, outputs, out_dict)
+             # RANSAC/PnP
             cur_process_time = time.perf_counter() - start_process_time
             total_process_time += cur_process_time
-
+            depth_time.append(cur_process_time)
+            
             iters_after_start = idx + 1 - num_warmup * int(idx >= num_warmup)
             seconds_per_img = total_compute_time / iters_after_start
             if idx >= num_warmup * 2 or seconds_per_img > 5:
@@ -800,7 +859,16 @@ def gdrn_inference_on_dataset(cfg, model, data_loader, evaluator, amp_test=False
             num_devices,
         )
     )
+    """
+    if cfg.FAST.INSPECT :
+        model._module.save()
+    """   
+    if cfg.TEST.USE_DEPTH_REFINE:
+        depth_time=sum(depth_time[num_warmup:])/len(depth_time[num_warmup:])
+        logger.info (f"Fast_refinement {depth_time} ")
 
+    avg_det=sum(avg_det_time[num_warmup:])/len(avg_det_time[num_warmup:])
+    logger.info (f"Average_det_time {avg_det} ")
     results = evaluator.evaluate()  # results is always None
     # An evaluator may return None when not in main process.
     # Replace it by an empty dict instead to make it easier for downstream code to handle

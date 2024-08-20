@@ -45,6 +45,7 @@ from core.gdrn_modeling.models import (
     GDRN_cls2reg,
     GDRN_double_mask,
     GDRN_Dstream_double_mask,
+    GDRN_double_mask_prog
 )  # noqa
 
 
@@ -58,15 +59,14 @@ def setup(args):
         cfg.merge_from_dict(args.opts)
     ############## pre-process some cfg options ######################
     # NOTE: check if need to set OUTPUT_DIR automatically
-    import ipdb;ipdb.set_trace()
     if cfg.OUTPUT_DIR.lower() == "auto":
         cfg.OUTPUT_DIR = osp.join(
             cfg.OUTPUT_ROOT,
             osp.splitext(args.config_file)[0].split("configs/")[1],
         )
         iprint(f"OUTPUT_DIR was automatically set to: {cfg.OUTPUT_DIR}")
-
-    cfg.OUTPUT_DIR=osp.join(cfg.OUTPUT_DIR,cfg.EXP_ID)
+    if not args.eval_only:
+        cfg.OUTPUT_DIR=osp.join(cfg.OUTPUT_DIR,cfg.EXP_ID)
 
     if cfg.get("EXP_NAME", "") == "":
         setproctitle("{}.{}".format(osp.splitext(osp.basename(args.config_file))[0], get_time_str()))
@@ -122,7 +122,7 @@ def setup(args):
         cfg.TRAIN.PRINT_FREQ = 1
     # register datasets
     register_datasets_in_cfg(cfg)
-
+    """
     exp_id = "{}".format(osp.splitext(osp.basename(args.config_file))[0])
 
     if args.eval_only:
@@ -132,6 +132,7 @@ def setup(args):
         else:
             exp_id += "_test"
     cfg.EXP_ID = exp_id
+    """
     cfg.RESUME = args.resume
     ####################################
     # cfg.freeze()
@@ -172,24 +173,30 @@ class Lite(GDRN_Lite):
             # sum(p.numel() for p in model.parameters() if p.requires_grad)
             params = sum(p.numel() for p in model.parameters()) / 1e6
             logger.info("{}M params".format(params))
-
-        if cfg.TEST.SAVE_RESULTS_ONLY:  # save results only ------------------------------
+        if cfg.LATENCY.MEASURE>0:
             MyCheckpointer(model, save_dir=cfg.OUTPUT_DIR, prefix_to_remove="_module.").resume_or_load(
                 cfg.MODEL.WEIGHTS, resume=args.resume
             )
-            return self.do_save_results(cfg, model)
+            self.do_latency(cfg, model)
+        else:
 
-        if args.eval_only:  # eval only --------------------------------------------------
-            MyCheckpointer(model, save_dir=cfg.OUTPUT_DIR, prefix_to_remove="_module.").resume_or_load(
-                cfg.MODEL.WEIGHTS, resume=args.resume
-            )
+            if cfg.TEST.SAVE_RESULTS_ONLY:  # save results only ------------------------------
+                MyCheckpointer(model, save_dir=cfg.OUTPUT_DIR, prefix_to_remove="_module.").resume_or_load(
+                    cfg.MODEL.WEIGHTS, resume=args.resume
+                )
+                return self.do_save_results(cfg, model)
+
+            if args.eval_only:  # eval only --------------------------------------------------
+                MyCheckpointer(model, save_dir=cfg.OUTPUT_DIR, prefix_to_remove="_module.").resume_or_load(
+                    cfg.MODEL.WEIGHTS, resume=args.resume
+                )
+                return self.do_test(cfg, model)
+
+            self.do_train(cfg, args, model, optimizer, renderer=renderer, resume=args.resume)
+            if hard_limit < FILE_LIMIT:
+                logger.warning("set sharing strategy for multiprocessing to file_system")
+                torch.multiprocessing.set_sharing_strategy("file_system")
             return self.do_test(cfg, model)
-
-        self.do_train(cfg, args, model, optimizer, renderer=renderer, resume=args.resume)
-        if hard_limit < FILE_LIMIT:
-            logger.warning("set sharing strategy for multiprocessing to file_system")
-            torch.multiprocessing.set_sharing_strategy("file_system")
-        return self.do_test(cfg, model)
 
 
 @loguru_logger.catch
@@ -232,5 +239,4 @@ if __name__ == "__main__":
     if args.eval_only and hard_limit < FILE_LIMIT:
         iprint("set sharing strategy for multiprocessing to file_system")
         torch.multiprocessing.set_sharing_strategy("file_system")
-
     main(args)

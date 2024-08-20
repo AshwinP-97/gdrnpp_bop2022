@@ -3,6 +3,18 @@ import logging
 import timm
 import pathlib
 
+
+available=True
+try:
+    from fastervit import create_model
+    
+except ImportError:
+    available=False
+
+if not available:
+    print("Contuing without library")
+
+
 _logger = logging.getLogger(__name__)
 
 

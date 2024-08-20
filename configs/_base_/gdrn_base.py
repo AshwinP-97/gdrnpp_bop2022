@@ -172,3 +172,27 @@ TEST = dict(
     DEPTH_REFINE_THRESHOLD=0.8,
     USE_COOR_Z_REFINE=False
 )
+DISTILLATION=dict(FLAG=False)
+
+LATENCY=dict(MEASURE=0)
+FAST=dict(
+    FLAG=True,
+    OUTPUT_DIR='/gdrnpp_bop2022/output/gdrn/lmo_pbr/convnext_a6_AugCosyAAEGray_BG05_mlL1_DMask_amodalClipBox_classAware_lmo/Fast',
+    WEIGHTS="",
+    
+    THRESHOLD_GEO=0,
+    THRESHOLD_PNP=0,
+    MODEL_CFG=dict(PRUNE=False,
+                   GEO_HEAD_feat=256,
+                   GEO_HEAD_num_groups=32,
+                   PNP_NET_Input=128,
+                   PNP_NET_num_groups=32,
+                   
+                   PNP_NET_fc_out=1024,
+                   PNP_NET_fc2_out=256 )
+)
+ABLATE=dict(FLAG=False,
+THRESHOLD=32)
+
+VALIDATE=dict(VAL=False,
+              PERIOD=-1)

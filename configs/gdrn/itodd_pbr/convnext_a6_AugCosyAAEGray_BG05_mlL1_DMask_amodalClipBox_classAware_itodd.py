@@ -73,7 +73,7 @@ MODEL = dict(
             FREEZE=False,
             PRETRAINED="timm",
             INIT_CFG=dict(
-                type="timm/convnext_base",
+                type="timm/convnext_base.fb_in1k",
                 pretrained=True,
                 in_chans=3,
                 features_only=True,
@@ -145,6 +145,8 @@ VAL = dict(
     USE_BOP=True,  # whether to use bop toolkit
     SAVE_BOP_CSV_ONLY=True,
 )
-
+LATENCY = dict(MEASURE=1)
 
 TEST = dict(EVAL_PERIOD=0, VIS=False, TEST_BBOX_TYPE="est")  # gt | est
+
+EXP_ID = 'itodd_original'

@@ -582,7 +582,7 @@ def project_pts(pts, K, R, t):
     return pts_im[:2, :].T  # Nx2
 
 
-@jit
+@jit(nopython=True)
 def get_obj_im_c(K, t):
     # t: cam_t_m2c
     K = K.astype(np.float32)
@@ -761,7 +761,7 @@ def calc_pose_2d_bbox_xyxy_v2(points, width, height, K, R_m2c, t_m2c):
     return calc_2d_bbox_xyxy_v2(pts_im[:, 0], pts_im[:, 1], width, height)
 
 
-@jit
+@jit(nopython=True)
 def compute_2d_bbox_xyxy_from_pose(points, pose, K, width=640, height=480, clip=False):
     x3d = np.ones((4, points.shape[0]), dtype=np.float32)
     x3d[0, :] = points[:, 0]
@@ -789,7 +789,7 @@ def compute_2d_bbox_xyxy_from_pose(points, pose, K, width=640, height=480, clip=
     return np.array([x1, y1, x2, y2])  # NOTE: this is not rounded
 
 
-@jit
+@jit(nopython=True)
 def compute_2d_bbox_xyxy_from_pose_v2(points, pose, K, width=640, height=480, clip=False):
     """br excluded."""
     x3d = np.ones((4, points.shape[0]), dtype=np.float32)
@@ -818,7 +818,7 @@ def compute_2d_bbox_xyxy_from_pose_v2(points, pose, K, width=640, height=480, cl
     return np.array([x1, y1, x2 + 1, y2 + 1])  # NOTE: this is not rounded
 
 
-@jit
+@jit(nopython=True)
 def compute_2d_bbox_xywh_from_pose(points, pose, K, width=640, height=480, clip=False):
     x1, y1, x2, y2 = compute_2d_bbox_xyxy_from_pose(points, pose, K, width=width, height=height, clip=clip)
     return np.array([x1, y1, x2 - x1 + 1, y2 - y1 + 1])  # NOTE: this is not rounded

@@ -75,7 +75,7 @@ MODEL = dict(
             FREEZE=False,
             PRETRAINED="timm",
             INIT_CFG=dict(
-                type="timm/convnext_base",
+                type="timm/convnext_base.fb_in1k",
                 pretrained=True,
                 in_chans=3,
                 features_only=True,
@@ -136,8 +136,9 @@ VAL = dict(
     SPLIT_TYPE="",
     SCRIPT_PATH="lib/pysixd/scripts/eval_pose_results_more.py",
     TARGETS_FILENAME="test_targets_bop19.json",
-    ERROR_TYPES="vsd,mspd,mssd",
+    ERROR_TYPES="vsd,mspd,mssd,ad",
     USE_BOP=True,  # whether to use bop toolkit
 )
-
+LATENCY = dict(MEASURE=0)
 TEST = dict(EVAL_PERIOD=0, VIS=False, TEST_BBOX_TYPE="est")  # gt | est
+EXP_ID="original"

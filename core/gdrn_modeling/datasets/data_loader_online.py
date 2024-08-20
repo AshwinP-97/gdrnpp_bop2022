@@ -198,6 +198,7 @@ class GDRN_Online_DatasetFromList(Base_DatasetFromList):
 
         # TODO: get models info similarly
         """
+        
         if dataset_name in self.fps_points:
             return self.fps_points[dataset_name]
 
@@ -578,6 +579,8 @@ class GDRN_Online_DatasetFromList(Base_DatasetFromList):
         obj_center = anno["centroid_2d"]
         delta_c = obj_center - bbox_center
         dataset_dict["trans_ratio"] = torch.as_tensor([delta_c[0] / bw, delta_c[1] / bh, z_ratio]).to(torch.float32)
+
+        
         return dataset_dict
 
     def read_data_test(self, dataset_dict):
@@ -743,7 +746,7 @@ class GDRN_Online_DatasetFromList(Base_DatasetFromList):
                     dataset_dict[_key] = torch.as_tensor(np.array(roi_infos[_key]))
                 else:
                     dataset_dict[_key] = torch.as_tensor(roi_infos[_key])
-
+        
         return dataset_dict
 
     def smooth_xyz(self, xyz):

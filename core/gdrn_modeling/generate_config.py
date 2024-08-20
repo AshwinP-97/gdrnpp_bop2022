@@ -179,7 +179,7 @@ class Lite(GDRN_Lite):
     def fast_gdrnpp(self,cfg,model,args):
         
         #for threshold in range(int(cfg.FAST.THRESHOLD_PNP)+1):
-        new_cfg=prune(cfg,model,args,output=cfg.FAST.OUTPUT_DIR)
+        new_cfg=prune(cfg,model,args,output=cfg.FAST.OUTPUT_DIR,threshold_geo=cfg.FAST.THRESHOLD_GEO,threshold_pnp=cfg.FAST.THRESHOLD_PNP)
         #threshold_geo=cfg.FAST.THRESHOLD_GEO,threshold_pnp=threshold)
         
         

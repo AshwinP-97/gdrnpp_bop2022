@@ -92,7 +92,7 @@ SOLVER = dict(
     ANNEAL_POINT=0.72,
     POLY_POWER=0.9,
     REL_STEPS=(0.5, 0.75),
-    CHECKPOINT_PERIOD=5,
+    CHECKPOINT_PERIOD=1,
     CHECKPOINT_BY_EPOCH=True,
     MAX_TO_KEEP=5,
     CLIP_GRADIENTS=dict(
@@ -121,7 +121,7 @@ VAL = dict(
     USE_BOP=True,
     SAVE_BOP_CSV_ONLY=False)
 TEST = dict(
-    EVAL_PERIOD=0,
+    EVAL_PERIOD=1,
     VIS=False,
     TEST_BBOX_TYPE='est',
     PRECISE_BN=dict(ENABLED=False, NUM_ITER=200),

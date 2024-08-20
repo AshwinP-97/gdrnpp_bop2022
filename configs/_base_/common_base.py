@@ -179,7 +179,7 @@ SOLVER = dict(
 # Specific train options
 # ---------------------------------------------------------------------------- #
 TRAIN = dict(
-    PRINT_FREQ=100,
+    PRINT_FREQ=1000,
     VERBOSE=False,
     VIS=False,
     # vis imgs in tensorboard

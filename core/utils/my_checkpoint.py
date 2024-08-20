@@ -10,12 +10,10 @@ from mmcv.runner.checkpoint import (
 import math
 import logging
 import timm
-from timm.models.helpers import (
-    load_state_dict_from_hf,
-    load_state_dict_from_url,
-    has_hf_hub,
-    adapt_input_conv,
-)
+from timm.models.helpers import load_state_dict as state
+"""
+from timm.models.helpers import (load_state_dict_from_url,load_state_dict_from_hf,hf_hub_id,has_hf_hub)
+"""
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 from pytorch_lightning.lite.wrappers import _LiteModule
@@ -135,6 +133,7 @@ def load_timm_pretrained(
     default_cfg = default_cfg or getattr(model, "default_cfg", None) or {}
     pretrained_url = default_cfg.get("url", None)
     hf_hub_id = default_cfg.get("hf_hub", None)
+    """
     if not pretrained_url and not hf_hub_id:
         _logger.warning("No pretrained weights exist for this model. Using random initialization.")
         return
@@ -144,6 +143,9 @@ def load_timm_pretrained(
     else:
         _logger.info(f"Loading pretrained weights from url ({pretrained_url})")
         state_dict = load_state_dict_from_url(pretrained_url, progress=progress, map_location="cpu")
+    """
+    state_dict = state(pretrained_url, progress=progress, device="cpu")
+
     if filter_fn is not None:
         # for backwards compat with filter fn that take one arg, try one first, the two
         try:

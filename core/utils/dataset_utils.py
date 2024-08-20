@@ -103,6 +103,27 @@ def filter_invalid_in_dataset_dicts(dataset_dicts, visib_thr=0.0):
         logger.warning(f"filtered out {num_filtered} instances with visib_fract <= {visib_thr}")
     return new_dicts
 
+def train_val_split(dataset_dicts,split=0.9):
+
+    
+    torch.manual_seed(404)
+    train,val=[],[]
+    instances=len(dataset_dicts)
+    
+    val_data=int((1-split)*instances)
+    val_data=torch.randint(high=instances,size=(val_data,))
+    
+    
+
+    for i in range(instances):
+        if i in val_data:
+            val.append(dataset_dicts[i])
+        else:
+            train.append(dataset_dicts[i])
+
+    
+    return train,val
+
 
 def trivial_batch_collator(batch):
     """A batch collator that does nothing.

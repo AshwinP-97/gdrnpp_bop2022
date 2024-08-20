@@ -50,7 +50,7 @@ DATASETS = dict(
 
 DATALOADER = dict(
     # Number of data loading threads
-    NUM_WORKERS=2,
+    NUM_WORKERS=8,
     FILTER_VISIB_THR=0.3,
 )
 
@@ -67,7 +67,7 @@ MODEL = dict(
             FREEZE=False,
             PRETRAINED="timm",
             INIT_CFG=dict(
-                type="timm/convnext_base",
+                type="timm/convnext_base.fb_in1k",
                 pretrained=True,
                 in_chans=3,
                 features_only=True,
@@ -146,7 +146,7 @@ FAST=dict(
     OUTPUT_DIR='/gdrnpp_bop2022/output/gdrn/lmo_pbr/convnext_a6_AugCosyAAEGray_BG05_mlL1_DMask_amodalClipBox_classAware_lmo/Fast',
     WEIGHTS="",
     INSPECT=True,
-    THRESHOLD_GEO=0,
+    THRESHOLD_GEO=32,
     THRESHOLD_PNP=0,
     MODEL_CFG=dict(PRUNE=False,
                    GEO_HEAD_feat=256,
@@ -157,5 +157,6 @@ FAST=dict(
                    PNP_NET_fc_out=1024,
                    PNP_NET_fc2_out=256 )
 )
-ABLATE=dict(FLAG=True,
+EXP_ID="fast"
+ABLATE=dict(FLAG=False,
 THRESHOLD=32)
